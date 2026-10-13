@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ОстеоЖурнал">
+  <title>Журнал приёма — Остеопат</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      background-color: #F2F2F7;
+      color: #1C1C1E;
+      -webkit-tap-highlight-color: transparent;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .ios-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .modal-backdrop {
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- Шапка -->
+  <header class="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 pt-3 pb-3">
+    <div class="flex items-center justify-between max-w-md mx-auto">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-slate-900">Журнал остеопата</h1>
+        <p id="currentDateLabel" class="text-xs text-slate-500 font-medium"></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="date" id="datePickerInput" class="sr-only" onchange="onDateInputChange(this.value)">
+        <button onclick="document.getElementById('datePickerInput').showPicker ? document.getElementById('datePickerInput').showPicker() : document.getElementById('datePickerInput').click()" class="p-2.5 rounded-full bg-slate-100 active:bg-slate-200 text-slate-700 text-sm font-medium" title="Выбрать дату">
+          📅
+        </button>
+        <button onclick="openSettingsModal()" class="p-2.5 rounded-full bg-teal-50 active:bg-teal-100 text-teal-700 text-sm font-medium" title="Настройки шага и времени">
+          ⚙️ Шаг
+        </button>
+      </div>
+    </div>
+
+    <!-- Быстрая лента дат -->
+    <div id="weekStrip" class="flex gap-2 overflow-x-auto no-scrollbar max-w-md mx-auto mt-3 pt-1"></div>
+  </header>
+
+  <!-- Основной контент -->
+  <main class="max-w-md mx-auto px-4 mt-4 space-y-4">
+
+    <!-- Панель сводки и быстрого переключения шага -->
+    <div class="ios-card p-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-xl text-xs font-semibold">
+          Шаг: <span id="stepBadge">60</span> мин
+        </div>
+        <div class="text-xs text-slate-500">
+          Записей: <span id="bookedCountBadge" class="font-bold text-slate-800">0</span>
+        </div>
+      </div>
+      <button onclick="openCustomSlotModal()" class="text-xs font-semibold text-teal-600 bg-teal-50/70 px-3 py-1.5 rounded-xl active:bg-teal-100">
+        + Своё время
+      </button>
+    </div>
+
+    <!-- Сетка времени -->
+    <div id="slotsContainer" class="space-y-2.5"></div>
+
+    <!-- Секция отменённых приёмов за выбранный день -->
+    <div id="cancelledSection" class="hidden pt-4">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">Отменённые записи за этот день</h3>
+      <div id="cancelledContainer" class="space-y-2"></div>
+    </div>
+
+  </main>
+
+  <!-- Модальное окно записи / редактирования пациента -->
+  <div id="bookingModal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-end sm:items-center justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto animate-slide-up">
+      <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+        <div>
+          <h2 id="modalTitle" class="text-lg font-bold text-slate-900">Запись на приём</h2>
+          <p id="modalSubtitle" class="text-xs text-teal-600 font-semibold"></p>
+        </div>
+        <button onclick="closeBookingModal()" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 font-bold">✕</button>
+      </div>
+
+      <input type="hidden" id="bookingId">
+
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Время приёма</label>
+            <input type="time" id="bookingTime" class="w-full mt-1 px-3 py-2.5 bg-slate-100 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Статус</label>
+            <select id="bookingStatus" class="w-full mt-1 px-3 py-2.5 bg-slate-100 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-500">
+              <option value="booked">🕒 Записан</option>
+              <option value="confirmed">✅ Подтверждён</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-500">ФИО пациента *</label>
+          <input type="text" id="patientName" placeholder="Например: Иванова Анна" class="w-full mt-1 px-3.5 py-2.5 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-teal-500">
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Телефон (для напоминаний)</label>
+          <input type="tel" id="patientPhone" placeholder="+7 999 000-00-00" class="w-full mt-1 px-3.5 py-2.5 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-teal-500">
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Жалобы / Примечание</label>
+          <textarea id="patientNotes" rows="2" placeholder="ШОП, таз, мигрени, первичный приём..." class="w-full mt-1 px-3.5 py-2 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-teal-500"></textarea>
+        </div>
+      </div>
+
+      <!-- Блок быстрых напоминаний (показывается для сохранённой записи) -->
+      <div id="remindersBlock" class="hidden pt-2 border-t border-gray-100 space-y-2.5">
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Напоминания и уведомления</p>
+        
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="sendReminder('whatsapp', 'remind')" class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold active:bg-emerald-100">
+            💬 Напомнить (WA)
+          </button>
+          <button onclick="sendReminder('sms', 'remind')" class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-50 text-blue-700 text-xs font-semibold active:bg-blue-100">
+            ✉️ Напомнить (SMS)
+          </button>
+        </div>
+
+        <button onclick="addToIosCalendar()" class="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold active:bg-amber-100">
+          🔔 Поставить напоминание в Календарь iPhone
+        </button>
+
+        <div class="pt-1 flex gap-2">
+          <button onclick="cancelAppointment(true)" class="flex-1 py-2.5 px-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-semibold active:bg-rose-100">
+            ❌ Отменить и уведомить пациента
+          </button>
+          <button onclick="cancelAppointment(false)" class="py-2.5 px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-semibold active:bg-gray-200">
+            Просто отменить
+          </button>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button id="deleteBtn" onclick="deleteAppointmentPermanently()" class="hidden px-4 py-3 rounded-xl bg-gray-100 text-rose-600 text-sm font-semibold">
+          🗑
+        </button>
+        <button onclick="saveBooking()" class="flex-1 py-3 rounded-xl bg-teal-600 active:bg-teal-700 text-white text-sm font-bold shadow-sm">
+          Сохранить запись
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно настроек шага приёма и расписания -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-end sm:items-center justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+        <h2 class="text-lg font-bold text-slate-900">Настройка шага и времени</h2>
+        <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-500 block mb-2">Шаг приёма (длительность слота)</label>
+          <div class="grid grid-cols-5 gap-1.5" id="stepSelectorGrid">
+            <button type="button" onclick="selectStepValue(30)" data-step="30" class="step-btn py-2.5 rounded-xl text-xs font-bold border">30 м</button>
+            <button type="button" onclick="selectStepValue(45)" data-step="45" class="step-btn py-2.5 rounded-xl text-xs font-bold border">45 м</button>
+            <button type="button" onclick="selectStepValue(60)" data-step="60" class="step-btn py-2.5 rounded-xl text-xs font-bold border">60 м</button>
+            <button type="button" onclick="selectStepValue(75)" data-step="75" class="step-btn py-2.5 rounded-xl text-xs font-bold border">75 м</button>
+            <button type="button" onclick="selectStepValue(90)" data-step="90" class="step-btn py-2.5 rounded-xl text-xs font-bold border">90 м</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Начало дня</label>
+            <input type="time" id="settingStartHour" class="w-full mt-1 px-3 py-2.5 bg-slate-100 rounded-xl text-sm font-semibold">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Конец дня</label>
+            <input type="time" id="settingEndHour" class="w-full mt-1 px-3 py-2.5 bg-slate-100 rounded-xl text-sm font-semibold">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Адрес кабинета (подставляется в напоминание)</label>
+          <input type="text" id="settingAddress" placeholder="Например: ул. Чистопольская, каб. 204" class="w-full mt-1 px-3.5 py-2.5 bg-slate-100 rounded-xl text-sm">
+        </div>
+
+        <div class="pt-2 border-t border-gray-100 flex items-center justify-between">
+          <button onclick="exportBackup()" class="text-xs font-semibold text-teal-700 bg-teal-50 px-3 py-2 rounded-xl">
+            📥 Сохранить копию базы
+          </button>
+          <label class="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-2 rounded-xl cursor-pointer">
+            📤 Загрузить копию
+            <input type="file" accept=".json" class="hidden" onchange="importBackup(event)">
+          </label>
+        </div>
+      </div>
+
+      <button onclick="saveSettings()" class="w-full py-3 rounded-xl bg-teal-600 text-white text-sm font-bold">
+        Применить настройки
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- СОСТОЯНИЕ И БАЗА ДАННЫХ ---
+    const STORAGE_KEY = 'osteo_app_data_v1';
+
+    let state = {
+      selectedDate: formatDateISO(new Date()),
+      settings: {
+        stepMinutes: 60,
+        startHour: '09:00',
+        endHour: '18:00',
+        address: ''
+      },
+      daySettings: {}, // Индивидуальный шаг для конкретных дат
+      appointments: [] // { id, date, time, patientName, phone, notes, status }
+    };
+
+    function loadData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          state.settings = { ...state.settings, ...(parsed.settings || {}) };
+          state.daySettings = parsed.daySettings || {};
+          state.appointments = parsed.appointments || [];
+        } catch (e) { console.error(e); }
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        settings: state.settings,
+        daySettings: state.daySettings,
+        appointments: state.appointments
+      }));
+    }
+
+    // --- УТИЛИТЫ ДАТЫ И ВРЕМЕНИ ---
+    function formatDateISO(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatHumanDate(isoStr) {
+      const [y, m, d] = isoStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+
+    function timeToMinutes(t) {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    }
+
+    function minutesToTime(mins) {
+      const h = String(Math.floor(mins / 60)).padStart(2, '0');
+      const m = String(mins % 60).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+
+    function getActiveConfigForDate(dateStr) {
+      return state.daySettings[dateStr] || state.settings;
+    }
+
+    // --- РЕНДЕРИНГ ИНТЕРФЕЙСА ---
+    function renderAll() {
+      document.getElementById('datePickerInput').value = state.selectedDate;
+      const human = formatHumanDate(state.selectedDate);
+      document.getElementById('currentDateLabel').textContent = human.charAt(0).toUpperCase() + human.slice(1);
+
+      const cfg = getActiveConfigForDate(state.selectedDate);
+      document.getElementById('stepBadge').textContent = cfg.stepMinutes;
+
+      renderWeekStrip();
+      renderTimeSlots();
+    }
+
+    function renderWeekStrip() {
+      const strip = document.getElementById('weekStrip');
+      strip.innerHTML = '';
+      const [y, m, d] = state.selectedDate.split('-').map(Number);
+      const baseDate = new Date(y, m - 1, d);
+
+      // Показываем 14 дней вокруг выбранной даты (-2 до +11)
+      for (let i = -2; i <= 11; i++) {
+        const cur = new Date(baseDate);
+        cur.setDate(baseDate.getDate() + i);
+        const iso = formatDateISO(cur);
+        const isSelected = iso === state.selectedDate;
+        const dayName = cur.toLocaleDateString('ru-RU', { weekday: 'short' });
+        const dayNum = cur.getDate();
+
+        const activeBookings = state.appointments.filter(a => a.date === iso && a.status !== 'cancelled').length;
+
+        const btn = document.createElement('button');
+        btn.onclick = () => { state.selectedDate = iso; renderAll(); };
+        btn.className = `flex flex-col items-center justify-center min-w-[52px] py-2 rounded-2xl transition ${
+          isSelected ? 'bg-teal-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700'
+        }`;
+        btn.innerHTML = `
+          <span class="text-[10px] uppercase font-semibold ${isSelected ? 'text-teal-100' : 'text-slate-400'}">${dayName}</span>
+          <span class="text-sm font-bold mt-0.5">${dayNum}</span>
+          <div class="h-1.5 mt-1 flex gap-0.5">
+            ${activeBookings > 0 ? `<span class="w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-teal-500'}"></span>` : ''}
+          </div>
+        `;
+        strip.appendChild(btn);
+      }
+    }
+
+    function renderTimeSlots() {
+      const container = document.getElementById('slotsContainer');
+      const cancelledSection = document.getElementById('cancelledSection');
+      const cancelledContainer = document.getElementById('cancelledContainer');
+      container.innerHTML = '';
+      cancelledContainer.innerHTML = '';
+
+      const cfg = getActiveConfigForDate(state.selectedDate);
+      const startMins = timeToMinutes(cfg.startHour);
+      const endMins = timeToMinutes(cfg.endHour);
+      const step = Number(cfg.stepMinutes) || 60;
+
+      // Генерируем базовые слоты по шагу
+      const timeSet = new Set();
+      for (let m = startMins; m + step <= endMins + 5; m += step) {
+        timeSet.add(minutesToTime(m));
+      }
+
+      // Добавляем время существующих записей, если шаг менялся
+      const dayApps = state.appointments.filter(a => a.date === state.selectedDate);
+      const activeApps = dayApps.filter(a => a.status !== 'cancelled');
+      const cancelledApps = dayApps.filter(a => a.status === 'cancelled');
+
+      activeApps.forEach(a => timeSet.add(a.time));
+
+      document.getElementById('bookedCountBadge').textContent = activeApps.length;
+
+      const sortedTimes = Array.from(timeSet).sort();
+
+      sortedTimes.forEach(timeStr => {
+        const app = activeApps.find(a => a.time === timeStr);
+        const card = document.createElement('div');
+
+        if (app) {
+          const isConfirmed = app.status === 'confirmed';
+          card.className = `ios-card p-3.5 border-l-4 ${isConfirmed ? 'border-emerald-500' : 'border-teal-500'} flex items-center justify-between active:scale-[0.99] transition cursor-pointer`;
+          card.onclick = () => openEditBookingModal(app.id);
+          card.innerHTML = `
+            <div class="flex items-start gap-3 pr-2">
+              <div class="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-1.5 rounded-xl">${app.time}</div>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-sm text-slate-900">${escapeHtml(app.patientName)}</span>
+                  <span class="text-xs">${isConfirmed ? '✅' : '🕒'}</span>
+                </div>
+                ${app.phone ? `<p class="text-xs text-slate-500 mt-0.5">${escapeHtml(app.phone)}</p>` : ''}
+                ${app.notes ? `<p class="text-xs text-teal-700 bg-teal-50/80 px-2 py-0.5 rounded-md mt-1 inline-block">${escapeHtml(app.notes)}</p>` : ''}
+              </div>
+            </div>
+            <div class="text-slate-300 text-lg font-bold">›</div>
+          `;
+        } else {
+          card.className = 'ios-card p-3 flex items-center justify-between border border-dashed border-slate-200 bg-white/60 active:bg-teal-50/40 transition cursor-pointer';
+          card.onclick = () => openNewBookingModal(timeStr);
+          card.innerHTML = `
+            <div class="flex items-center gap-3">
+              <span class="text-sm font-semibold text-slate-500 px-2.5 py-1 rounded-xl bg-slate-100/80">${timeStr}</span>
+              <span class="text-xs font-medium text-slate-400">Свободное окно</span>
+            </div>
+            <span class="text-xs font-semibold text-teal-600 bg-teal-50 px-2.5 py-1 rounded-lg">+ Записать</span>
+          `;
+        }
+        container.appendChild(card);
+      });
+
+      // Отрисовка отменённых записей
+      if (cancelledApps.length > 0) {
+        cancelledSection.classList.remove('hidden');
+        cancelledApps.forEach(app => {
+          const item = document.createElement('div');
+          item.className = 'ios-card p-3 bg-rose-50/40 border border-rose-100 flex items-center justify-between';
+          item.innerHTML = `
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold line-through text-rose-400">${app.time}</span>
+                <span class="text-sm font-semibold text-slate-700">${escapeHtml(app.patientName)}</span>
+                <span class="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">Отменено</span>
+              </div>
+              ${app.notes ? `<p class="text-xs text-slate-400 mt-0.5">${escapeHtml(app.notes)}</p>` : ''}
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="notifyCancelledById('${app.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-100 text-rose-700 text-xs font-semibold" title="Отправить уведомление об отмене">💬 Уведомить</button>
+              <button onclick="restoreAppointment('$
