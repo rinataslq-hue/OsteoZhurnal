@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ОстеоЖурнал">
+<title>ОстеоЖурнал — Запись и Анамнез</title>
+<style>
+  :root {
+    --bg: #F2F2F7;
+    --card: #FFFFFF;
+    --text: #1C1C1E;
+    --sub: #6C6C70;
+    --line: #E5E5EA;
+    --teal: #0D9488;
+    --teal-light: #CCFBF1;
+    --teal-bg: #F0FDFA;
+    --green: #10B981;
+    --amber: #F59E0B;
+    --rose: #F43F5E;
+    --blue: #3B82F6;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: calc(85px + env(safe-area-inset-bottom));
+  }
+  button, input, select, textarea { font-family: inherit; font-size: 14px; }
+  .header {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+    padding: max(14px, env(safe-area-inset-top)) 16px 10px;
+  }
+  .container { max-width: 480px; margin: 0 auto; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .title { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.3px; }
+  .subtitle { font-size: 13px; font-weight: 600; color: var(--teal); margin: 2px 0 0; }
+  .btn-icon {
+    border: none; background: #EFEFF4; color: var(--text);
+    padding: 8px 12px; border-radius: 99px; font-weight: 700; font-size: 13px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-icon.teal { background: var(--teal-bg); color: var(--teal); border: 1px solid var(--teal-light); }
+  .week-strip {
+    display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 2px;
+    scrollbar-width: none;
+  }
+  .week-strip::-webkit-scrollbar { display: none; }
+  .day-pill {
+    min-width: 50px; padding: 8px 4px; border-radius: 14px; border: none;
+    background: #EFEFF4; color: var(--text); display: flex; flex-direction: column;
+    align-items: center; gap: 2px; cursor: pointer; flex-shrink: 0;
+  }
+  .day-pill.active { background: var(--teal); color: #fff; box-shadow: 0 2px 8px rgba(13,148,136,0.28); }
+  .day-pill .dow { font-size: 10px; text-transform: uppercase; font-weight: 700; opacity: 0.7; }
+  .day-pill .num { font-size: 15px; font-weight: 800; }
+  .day-pill .dot { width: 5px; height: 5px; border-radius: 99px; background: var(--teal); margin-top: 2px; opacity: 0; }
+  .day-pill.has-items .dot { opacity: 1; }
+  .day-pill.active.has-items .dot { background: #fff; }
+
+  .main { max-width: 480px; margin: 12px auto 0; padding: 0 14px; }
+  .card {
+    background: var(--card); border-radius: 16px; padding: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 10px;
+  }
+  .summary-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
+  .badge {
+    background: var(--teal-bg); color: var(--teal); font-weight: 700;
+    padding: 6px 10px; border-radius: 10px; font-size: 12px; border: none; cursor: pointer;
+  }
+
+  .slot-free {
+    background: rgba(255,255,255,0.75); border: 1px dashed #CBD5E1;
+    border-radius: 14px; padding: 11px 14px; margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+  }
+  .slot-free:active, .slot-booked:active { transform: scale(0.99); }
+  .time-chip {
+    background: #F1F5F9; color: #334155; font-weight: 800; font-size: 14px;
+    padding: 5px 10px; border-radius: 10px; min-width: 62px; text-align: center;
+  }
+  .slot-booked {
+    background: var(--card); border-radius: 16px; padding: 13px 14px; margin-bottom: 9px;
+    border-left: 5px solid var(--teal); box-shadow: 0 2px 5px rgba(0,0,0,0.04); cursor: pointer;
+  }
+  .slot-booked.confirmed { border-left-color: var(--green); }
+  .slot-booked.done { border-left-color: #64748B; opacity: 0.88; }
+  .tag-mini {
+    display: inline-block; background: var(--teal-bg); color: var(--teal);
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; margin: 4px 4px 0 0;
+  }
+  .anamnesis-preview {
+    font-size: 12px; color: #475569; margin-top: 5px; line-height: 1.35;
+    background: #F8FAFC; padding: 6px 8px; border-radius: 8px;
+  }
+
+  /* Вкладки внизу */
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+    background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  }
+  .tabbar-inner { max-width: 480px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tab-btn {
+    border: none; background: transparent; padding: 6px; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: var(--sub); font-weight: 700; font-size: 11px; cursor: pointer;
+  }
+  .tab-btn.active { color: var(--teal); background: var(--teal-bg); }
+
+  /* Модальное окно */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.45);
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+    background: #fff; width: 100%; max-width: 480px;
+    border-radius: 24px 24px 0 0; padding: 18px 16px calc(20px + env(safe-area-inset-bottom));
+    max-height: 92vh; overflow-y: auto;
+  }
+  .field-label { display: block; font-size: 12px; font-weight: 700; color: var(--sub); margin: 10px 0 4px; }
+  .input {
+    width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: #F8FAFC; font-size: 14px; outline: none;
+  }
+  .input:focus { border-color: var(--teal); background: #fff; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+
+  .chip-group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .zone-chip {
+    border: 1px solid var(--line); background: #F8FAFC; color: #334155;
+    padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .zone-chip.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+
+  .btn-primary {
+    width: 100%; border: none; background: var(--teal); color: #fff;
+    padding: 13px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer;
+  }
+  .btn-soft {
+    border: none; padding: 10px 12px; border-radius: 12px; font-weight: 700;
+    font-size: 12px; cursor: pointer; text-align: center;
+  }
+  .btn-wa { background: #DCFCE7; color: #15803D; }
+  .btn-tg { background: #E0F2FE; color: #0369A1; }
+  .btn-sms { background: #EEF2FF; color: #4338CA; }
+  .btn-ios { background: #FEF3C7; color: #B45309; width: 100%; margin-top: 6px; font-size: 13px; }
+  .btn-cancel { background: #FFE4E6; color: #BE123C; }
+
+  .subtabs { display: grid; grid-template-columns: 1fr 1fr; background: #EFEFF4; padding: 3px; border-radius: 12px; margin: 10px 0; }
+  .subtab { border: none; background: transparent; padding: 7px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; color: var(--sub); }
+  .subtab.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .hidden { display: none !important; }
+  .history-box { background: #F8FAFC; border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 8px; max-height: 150px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<!-- ШАПКА -->
+<header class="header">
+  <div class="container">
+    <div class="row-between">
+      <div>
+        <h1 class="title">ОстеоЖурнал</h1>
+        <p id="dateTitle" class="subtitle">Сегодня</p>
+      </div>
+      <div class="row">
+        <button type="button" id="btnToday" class="btn-icon">Сегодня</button>
+        <label class="btn-icon" style="position:relative;">
+          📅 Дата
+          <input type="date" id="datePicker" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;">
+        </label>
+      </div>
+    </div>
+    <div id="weekStrip" class="week-strip"></div>
+  </div>
+</header>
+
+<!-- ВКЛАДКА 1: РАСПИСАНИЕ -->
+<main id="viewSchedule" class="main">
+  <div class="card summary-bar">
+    <div class="row">
+      <button type="button" id="btnQuickStep" class="badge">⚙️ Шаг: <span id="lblStep">60</span>м (перерыв <span id="lblBreak">0</span>м)</button>
+      <span style="font-size:12px;color:var(--sub);">Приёмов: <b id="lblCount" style="color:var(--text);">0</b></span>
+    </div>
+    <button type="button" id="btnCustomTime" class="badge">+ Своё окно</button>
+  </div>
+
+  <div id="slotsContainer"></div>
+
+  <div id="cancelledBox" class="hidden" style="margin-top:16px;">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--sub);margin:0 0 8px 4px;">Отменённые записи за этот день</div>
+    <div id="cancelledList"></div>
+  </div>
+</main>
+
+<!-- ВКЛАДКА 2: БАЗА ПАЦИЕНТОВ И АНАМНЕЗ -->
+<main id="viewPatients" class="main hidden">
+  <div class="card">
+    <div class="row-between" style="margin-bottom:8px;">
+      <h2 style="margin:0;font-size:17px;">База пациентов (<span id="totalPatientsCount">0</span>)</h2>
+    </div>
+    <input type="search" id="searchPatientInput" class="input" placeholder="🔍 Поиск по ФИО, телефону или жалобе...">
+  </div>
+  <div id="patientsList"></div>
+</main>
+
+<!-- ВКЛАДКА 3: НАСТРОЙКИ И ШАГ ПРИЁМА -->
+<main id="viewSettings" class="main hidden">
+  <div class="card">
+    <h2 style="margin:0 0 12px;font-size:17px;">Настройка шага приёма и графика</h2>
+    
+    <label class="field-label">Длительность сеанса (шаг приёма)</label>
+    <div id="stepSelectGrid" class="grid-5"></div>
+
+    <label class="field-label">Перерыв между пациентами (проветривание / отдых)</label>
+    <div id="breakSelectGrid" class="grid-5"></div>
+
+    <div class="grid-2" style="margin-top:8px;">
+      <div>
+        <label class="field-label">Начало рабочего дня</label>
+        <input type="time" id="cfgStart" class="input">
+      </div>
+      <div>
+        <label class="field-label">Конец рабочего дня</label>
+        <input type="time" id="cfgEnd" class="input">
+      </div>
+    </div>
+
+    <label class="field-label">Адрес кабинета / клиники (для СМС и WhatsApp)</label>
+    <input type="text" id="cfgAddress" class="input" placeholder="Например: ул. Чистопольская, каб. 204">
+
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:600;cursor:pointer;">
+      <input type="checkbox" id="cfgAutoIcs" style="width:18px;height:18px;">
+      Автоматически предлагать будильник в Календарь iPhone при новой записи
+    </label>
+
+    <button type="button" id="btnSaveSettings" class="btn-primary" style="margin-top:14px;">Сохранить настройки графика</button>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:15px;">🔔 Уведомления на iPhone</h3>
+    <p style="font-size:12px;color:var(--sub);margin:0 0 10px;line-height:1.4;">
+      1. Кнопка <b>«В Календарь iPhone»</b> в карточке приёма ставит системный будильник iOS за 2 часа и за 15 минут до сеанса.<br>
+      2. Вы также можете включить прямые Push-уведомления от приложения (для iPhone на iOS 16.4+, добавленного на экран «Домой»):
+    </p>
+    <button type="button" id="btnEnablePush" class="btn-soft btn-ios">🔔 Включить Push-уведомления на этом iPhone</button>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:15px;">💾 Резервная копия базы</h3>
+    <div class="grid-2">
+      <button type="button" id="btnExport" class="btn-soft" style="background:#F1F5F9;color:#0F172A;">📥 Скачать копию</button>
+      <label class="btn-soft" style="background:#F1F5F9;color:#0F172A;display:block;">
+        📤 Восстановить
+        <input type="file" id="fileImport" accept=".json" class="hidden">
+      </label>
+    </div>
+  </div>
+</main>
+
+<!-- МОДАЛЬНОЕ ОКНО: ЗАПИСЬ + АНАМНЕЗ + ХОД ПРИЁМА -->
+<div id="bookingModal" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="row-between" style="border-bottom:1px solid var(--line);padding-bottom:10px;">
+      <div>
+        <h2 id="mdlTitle" style="margin:0;font-size:18px;">Запись пациента</h2>
+        <p id="mdlSubtitle" style="margin:2px 0 0;font-size:12px;color:var(--teal);font-weight:700;"></p>
+      </div>
+      <button type="button" id="btnCloseModal" class="btn-icon">✕</button>
+    </div>
+
+    <input type="hidden" id="fId">
+
+    <div class="grid-3" style="margin-top:8px;">
+      <div>
+        <label class="field-label">Время</label>
+        <input type="time" id="fTime" class="input" style="font-weight:700;">
+      </div>
+      <div>
+        <label class="field-label">Шаг (мин)</label>
+        <select id="fDuration" class="input" style="font-weight:700;">
+          <option value="30">30 мин</option>
+          <option value="45">45 мин</option>
+          <option value="60">60 мин</option>
+          <option value="75">75 мин</option>
+          <option value="90">90 мин</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Статус</label>
+        <select id="fStatus" class="input" style="font-weight:700;">
+          <option value="booked">🕒 Записан</option>
+          <option value="confirmed">✅ Подтверждён</option>
+          <option value="done">🏁 Проведён</option>
+        </select>
+      </div>
+    </div>
+
+    <label class="field-label">ФИО пациента *</label>
+    <input type="text" id="fName" list="patientsDatalist" class="input" placeholder="Начните вводить имя...">
+    <datalist id="patientsDatalist"></datalist>
+
+    <div class="grid-2">
+      <div>
+        <label class="field-label">Телефон</label>
+        <input type="tel" id="fPhone" class="input" placeholder="+7 999 000-00-00">
+      </div>
+      <div>
+        <label class="field-label">Возраст / Примечание</label>
+        <input type="text" id="fAge" class="input" placeholder="Напр.: 34 г. / 2-й визит">
+      </div>
+    </div>
+
+    <!-- Переключатель внутри карточки: Анамнез / Ход приёма -->
+    <div class="subtabs">
+      <button type="button" id="tabBtnAnamnesis" class="subtab active">📋 Краткий анамнез</button>
+      <button type="button" id="tabBtnProgress" class="subtab">👐 Ход приёма и ЛФК</button>
+    </div>
+
+    <!-- Блок 1: Анамнез -->
+    <div id="paneAnamnesis">
+      <label class="field-label" style="margin-top:4px;">Зоны обращения (нажмите для быстрого выбора)</label>
+      <div id="zoneChips" class="chip-group"></div>
+
+      <label class="field-label">Жалобы и краткий анамнез (травмы, операции, характер боли)</label>
+      <textarea id="fAnamnesis" rows="3" class="input" placeholder="С чем обратился, где болит, давность, сопутствующие особенности..."></textarea>
+    </div>
+
+    <!-- Блок 2: Ход приёма -->
+    <div id="paneProgress" class="hidden">
+      <label class="field-label" style="margin-top:4px;">Ход приёма (выявленные дисфункции и проведённые техники)</label>
+      <textarea id="fSessionProgress" rows="3" class="input" placeholder="Соматические дисфункции, КСТ, МФР, коррекция таза/ШОП, реакция тканей..."></textarea>
+
+      <label class="field-label">Рекомендации пациенту / Домашка (ЛФК, режим, следующий визит)</label>
+      <textarea id="fRecommendations" rows="2" class="input" placeholder="Упражнения, питьевой режим, повторный приём через 2 недели..."></textarea>
+    </div>
+
+    <!-- История прошлых визитов этого пациента -->
+    <div id="patientHistoryWrap" class="hidden">
+      <label class="field-label">📚 История прошлых приёмов этого пациента</label>
+      <div id="patientHistoryList" class="history-box"></div>
+    </div>
+
+    <!-- Напоминания (на iPhone врачу и пациенту) -->
+    <div id="remindersPanel" class="hidden" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--sub);margin-bottom:6px;">Напоминание врачу на iPhone</div>
+      <button type="button" id="btnAddIcs" class="btn-soft btn-ios">🔔 Поставить будильник в Календарь iPhone (за 2ч и 15м)</button>
+
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--sub);margin:10px 0 6px;">Связаться с пациентом</div>
+      <div class="grid-3">
+        <button type="button" id="btnWaRemind" class="btn-soft btn-wa">💬 Напомнить WA</button>
+        <button type="button" id="btnTgRemind" class="btn-soft btn-tg">✈️ Telegram</button>
+        <button type="button" id="btnSmsRemind" class="btn-soft btn-sms">✉️ СМС</button>
+      </div>
+      <div class="grid-2" style="margin-top:6px;">
+        <button type="button" id="btnSendRecs" class="btn-soft" style="background:#F0FDFA;color:#0D9488;border:1px solid #CCFBF1;">📋 Отправить рекомендации WA</button>
+        <button type="button" id="btnCancelVisit" class="btn-soft btn-cancel">❌ Отменить приём</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button type="button" id="btnDeleteVisit" class="btn-soft btn-cancel hidden" style="padding:13px 14px;">🗑</button>
+      <button type="button" id="btnSaveVisit" class="btn-primary">Сохранить запись</button>
+    </div>
+  </div>
+</div>
+
+<!-- НИЖНЕЕ МЕНЮ -->
+<nav class="tabbar">
+  <div class="tabbar-inner">
+    <button type="button" class="tab-btn active" data-tab="Schedule">📅<span>Расписание</span></button>
+    <button type="button" class="tab-btn" data-tab="Patients">👥<span>Пациенты</span></button>
+    <button type="button" class="tab-btn" data-tab="Settings">⚙️<span>Шаг и график</span></button>
+  </div>
+</nav>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'osteo_pro_db_v3';
+  const ZONES = ['ШОП','ГОП','ПОП','Таз / КПС','ВНЧС','Кранио','Висцералка','Стопы','Головная боль','Дети'];
+
+  const pad = n => String(n).padStart(2,'0');
+  const toISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const toMin = t => { const p = (t||'09:00').split(':'); return (+p[0])*60 + (+p[1]||0); };
+  const fromMin = m => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+  const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  let state = {
+    date: toISO(new Date()),
+    cfg: { step: 60, breakMin: 0, start: '09:00', end: '18:00', address: '', autoIcs: false },
+    dayCfg: {},
+    visits: []
+  };
+
+  // Загрузка базы (плюс перенос записей из прошлой версии, если были)
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      state.cfg = Object.assign(state.cfg, p.cfg || {});
+      state.dayCfg = p.dayCfg || {};
+      state.visits = Array.isArray(p.visits) ? p.visits : [];
+    } else {
+      const old = localStorage.getItem('osteo_pwa_v2');
+      if (old) {
+        const op = JSON.parse(old);
+        if (Array.isArray(op.list)) {
+          state.visits = op.list.map(x => ({
+            id: x.id, date: x.date, time: x.time, duration: 60, status: x.status || 'booked',
+            name: x.name, phone: x.phone || '', age: '', zones: [],
+            anamnesis: x.notes || '', progress: '', recs: ''
+          }));
+        }
+      }
+    }
+  } catch(e){}
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ cfg: state.cfg, dayCfg: state.dayCfg, visits: state.visits })); } catch(e){}
+  }
+
+  function humanDate(iso) {
+    const [y,m,d] = iso.split('-').map(Number);
+    const s = new Date(y, m-1, d).toLocaleDateString('ru-RU', { weekday:'long', day:'numeric', month:'long' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function curDayCfg() {
+    return state.dayCfg[state.date] || { step: state.cfg.step, breakMin: state.cfg.breakMin, start: state.cfg.start, end: state.cfg.end };
+  }
+
+  // --- ОТРИСОВКА РАСПИСАНИЯ ---
+  function renderSchedule() {
+    document.getElementById('datePicker').value = state.date;
+    document.getElementById('dateTitle').textContent = humanDate(state.date);
+    const dc = curDayCfg();
+    document.getElementById('lblStep').textContent = dc.step;
+    document.getElementById('lblBreak').textContent = dc.breakMin || 0;
+
+    // Лента недель
+    const strip = document.getElementById('weekStrip');
+    strip.innerHTML = '';
+    const [y,m,d] = state.date.split('-').map(Number);
+    const base = new Date(y, m-1, d);
+    for (let i = -3; i <= 11; i++) {
+      const dt = new Date(base);
+      dt.setDate(base.getDate() + i);
+      const iso = toISO(dt);
+      const has = state.visits.some(v => v.date === iso && v.status !== 'cancelled');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `day-pill ${iso===state.date?'active':''} ${has?'has-items':''}`;
+      btn.innerHTML = `<span class="dow">${dt.toLocaleDateString('ru-RU',{weekday:'short'})}</span><span class="num">${dt.getDate()}</span><span class="dot"></span>`;
+      btn.onclick = () => { state.date = iso; renderSchedule(); };
+      strip.appendChild(btn);
+    }
+
+    // Генерация сетки по шагу приёма + перерыву
+    const times = new Set();
+    const sMin = toMin(dc.start), eMin = toMin(dc.end);
+    const step = (+dc.step || 60) + (+dc.breakMin || 0);
+    for (let t = sMin; t + (+dc.step||60) <= eMin + 5; t += step) {
+      times.add(fromMin(t));
+    }
+
+    const dayVisits = state.visits.filter(v => v.date === state.date);
+    const active = dayVisits.filter(v => v.status !== 'cancelled');
+    const cancelled = dayVisits.filter(v => v.status === 'cancelled');
+    active.forEach(v => times.add(v.time));
+
+    document.getElementById('lblCount').textContent = active.length;
+    const box = document.getElementById('slotsContainer');
+    box.innerHTML = '';
+
+    Array.from(times).sort().forEach(t => {
+      const v = active.find(x => x.time === t);
+      const el = document.createElement('div');
+      if (v) {
+        const stIcon = v.status === 'confirmed' ? '✅' : (v.status === 'done' ? '🏁' : '🕒');
+        const endT = fromMin(toMin(v.time) + (+v.duration || +dc.step || 60));
+        el.className = `slot-booked ${v.status}`;
+        el.innerHTML = `
+          <div class="row-between">
+            <div class="row">
+              <div class="time-chip">${v.time}<div style="font-size:10px;font-weight:600;color:var(--sub);">до ${endT}</div></div>
+              <div>
+                <div style="font-weight:800;font-size:15px;">${esc(v.name)} ${stIcon}</div>
+                <div style="font-size:12px;color:var(--sub);">${esc(v.phone || '')} ${v.age ? '• '+esc(v.age) : ''}</div>
+              </div>
+            </div>
+            <span style="color:#CBD5E1;font-size:18px;font-weight:800;">›</span>
+          </div>
+          ${(v.zones && v.zones.length) ? `<div>\${v.zones.map(z=>`<span class="tag-mini">${esc(z)}</span>`).join('')}</div>` : ''}
+          ${v.anamnesis ? `<div class="anamnesis-preview"><b>Анамнез:</b> \${esc(v.anamnesis)}</div>` : ''}
+          ${v.progress ? `<div class="anamnesis-preview" style="background:#F0FDFA;color:#0F766E;"><b>Ход приёма:</b> \${esc(v.progress)}</div>` : ''}
+        `;
+        el.onclick = () => openVisitModal(v.time, v);
+      } else {
+        const endT = fromMin(toMin(t) + (+dc.step || 60));
+        el.className = 'slot-free';
+        el.innerHTML = `
+          <div class="row">
+            <span class="time-chip">${t}</span>
+            <span style="font-size:12px;color:var(--sub);">Свободно (${t} – ${endT})</span>
+          </div>
+          <span class="badge">+ Записать</span>
+        `;
+        el.onclick = () => openVisitModal(t, null);
+      }
+      box.appendChild(el);
+    });
+
+    // Отменённые
+    const cBox = document.getElementById('cancelledBox');
+    const cList = document.getElementById('cancelledList');
+    cList.innerHTML = '';
+    if (cancelled.length) {
+      cBox.classList.remove('hidden');
+      cancelled.forEach(v => {
+        const item = document.createElement('div');
+        item.className = 'card row-between';
+        item.style.background = '#FFF1F2';
+        item.innerHTML = `
+          <div>
+            <span style="text-decoration:line-through;color:var(--rose);font-weight:800;margin-right:6px;">${v.time}</span>
+            <b>${esc(v.name)}</b>
+          </div>
+          <div class="row">
+            <button type="button" class="btn-soft btn-cancel btn-wa-can">💬 Уведомить</button>
+            <button type="button" class="btn-soft btn-ret" style="background:#E2E8F0;">↩️ Вернуть</button>
+          </div>
+        `;
+        item.querySelector('.btn-wa-can').onclick = () => sendMsg(v, 'wa', 'cancel');
+        item.querySelector('.btn-ret').onclick = () => { v.status = 'booked'; save(); renderSchedule(); };
+        cList.appendChild(item);
+      });
+    } else {
+      cBox.classList.add('hidden');
+    }
+  }
+
+  // --- МОДАЛЬНОЕ ОКНО ЗАПИСИ И АНАМНЕЗА ---
+  let selectedZones = [];
+
+  function drawZoneChips() {
+    const wrap = document.getElementById('zoneChips');
+    wrap.innerHTML = '';
+    ZONES.forEach(z => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `zone-chip ${selectedZones.includes(z) ? 'active' : ''}`;
+      b.textContent = z;
+      b.onclick = () => {
+        if (selectedZones.includes(z)) selectedZones = selectedZones.filter(x => x !== z);
+        else selectedZones.push(z);
+        drawZoneChips();
+      };
+      wrap.appendChild(b);
+    });
+  }
+
+  function populatePatientsDatalist() {
+    const dl = document.getElementById('patientsDatalist');
+    dl.innerHTML = '';
+    const map = new Map();
+    state.visits.forEach(v => { if (v.name) map.set(v.name.toLowerCase(), v); });
+    map.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      dl.appendChild(opt);
+    });
+  }
+
+  function showPatientHistory(name, currentId) {
+    const wrap = document.getElementById('patientHistoryWrap');
+    const list = document.getElementById('patientHistoryList');
+    const clean = (name || '').trim().toLowerCase();
+    if (!clean) { wrap.classList.add('hidden'); return; }
+    const past = state.visits.filter(v => v.name.toLowerCase() === clean && v.id !== currentId)
+      .sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+    if (!past.length) { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    list.innerHTML = past.map(p => `
+      <div style="border-bottom:1px solid var(--line);padding:6px 0;font-size:12px;">
+        <div style="font-weight:800;color:var(--teal);">${p.date} в ${p.time}</div>
+        ${p.anamnesis ? `<div><b>Анамнез:</b> \${esc(p.anamnesis)}</div>` : ''}
+        ${p.progress ? `<div><b>Ход приёма:</b> \${esc(p.progress)}</div>` : ''}
+        ${p.recs ? `<div><b>Рекомендации:</b> \${esc(p.recs)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function openVisitModal(time, v) {
+    populatePatientsDatalist();
+    const dc = curDayCfg();
+    document.getElementById('fId').value = v ? v.id : '';
+    document.getElementById('mdlTitle').textContent = v ? 'Карточка приёма' : 'Новая запись';
+    document.getElementById('mdlSubtitle').textContent = `${humanDate(state.date)} • ${time}`;
+    document.getElementById('fTime').value = time;
+    document.getElementById('fDuration').value = String(v && v.duration ? v.duration : (dc.step || 60));
+    document.getElementById('fStatus').value = v && v.status !== 'cancelled' ? v.status : 'booked';
+    document.getElementById('fName').value = v ? v.name : '';
+    document.getElementById('fPhone').value = v ? (v.phone || '') : '';
+    document.getElementById('fAge').value = v ? (v.age || '') : '';
+    selectedZones = v && Array.isArray(v.zones) ? [...v.zones] : [];
+    drawZoneChips();
+    document.getElementById('fAnamnesis').value = v ? (v.anamnesis || '') : '';
+    document.getElementById('fSessionProgress').value = v ? (v.progress || '') : '';
+    document.getElementById('fRecommendations').value = v ? (v.recs || '') : '';
+
+    switchSubtab('Anamnesis');
+    showPatientHistory(v ? v.name : '', v ? v.id : '');
+
+    document.getElementById('remindersPanel').classList.toggle('hidden', !v);
+    document.getElementById('btnDeleteVisit').classList.toggle('hidden', !v);
+    document.getElementById('bookingModal').classList.add('open');
+  }
+
+  // Автоподстановка данных постоянного пациента при вводе имени
+  document.getElementById('fName').oninput = e => {
+    const val = e.target.value.trim().toLowerCase();
+    const prev = state.visits.slice().reverse().find(v => v.name.toLowerCase() === val);
+    if (prev) {
+      if (!document.getElementById('fPhone').value) document.getElementById('fPhone').value = prev.phone || '';
+      if (!document.getElementById('fAge').value) document.getElementById('fAge').value = prev.age || '';
+      if (!document.getElementById('fAnamnesis').value && prev.anamnesis) document.getElementById('fAnamnesis').value = prev.anamnesis;
+    }
+    showPatientHistory(e.target.value, document.getElementById('fId').value);
+  };
+
+  function switchSubtab(which) {
+    const isAnam = which === 'Anamnesis';
+    document.getElementById('tabBtnAnamnesis').classList.toggle('active', isAnam);
+    document.getElementById('tabBtnProgress').classList.toggle('active', !isAnam);
+    document.getElementById('paneAnamnesis').classList.toggle('hidden', !isAnam);
+    document.getElementById('paneProgress').classList.toggle('hidden', isAnam);
+  }
+  document.getElementById('tabBtnAnamnesis').onclick = () => switchSubtab('Anamnesis');
+  document.getElementById('tabBtnProgress').onclick = () => switchSubtab('Progress');
+  document.getElementById('btnCloseModal').onclick = () => document.getElementById('bookingModal').classList.remove('open');
+
+  document.getElementById('btnSaveVisit').onclick = () => {
+    const name = document.getElementById('fName').value.trim();
+    if (!name) { alert('Введите ФИО пациента'); return; }
+    const id = document.getElementById('fId').value;
+    const isNew = !id;
+    const item = {
+      id: id || ('v_' + Date.now()),
+      date: state.date,
+      time: document.getElementById('fTime').value || '09:00',
+      duration: +document.getElementById('fDuration').value || 60,
+      status: document.getElementById('fStatus').value,
+      name,
+      phone: document.getElementById('fPhone').value.trim(),
+      age: document.getElementById('fAge').value.trim(),
+      zones: [...selectedZones],
+      anamnesis: document.getElementById('fAnamnesis').value.trim(),
+      progress: document.getElementById('fSessionProgress').value.trim(),
+      recs: document.getElementById('fRecommendations').value.trim()
+    };
+    if (id) {
+      const idx = state.visits.findIndex(x => x.id === id);
+      if (idx > -1) state.visits[idx] = item;
+    } else {
+      state.visits.push(item);
+    }
+    save();
+    document.getElementById('bookingModal').classList.remove('open');
+    renderSchedule();
+    if (isNew && state.cfg.autoIcs) {
+      downloadIcsForVisit(item);
+    }
+  };
+
+  function currentModalVisit() {
+    const id = document.getElementById('fId').value;
+    return state.visits.find(v => v.id === id);
+  }
+
+  document.getElementById('btnCancelVisit').onclick = () => {
+    const v = currentModalVisit();
+    if (!v) return;
+    v.status = 'cancelled';
+    save();
+    if (confirm('Приём отменён. Открыть WhatsApp, чтобы отправить уведомление пациенту?')) {
+      sendMsg(v, 'wa', 'cancel');
+    }
+    document.getElementById('bookingModal').classList.remove('open');
+    renderSchedule();
+  };
+
+  document.getElementById('btnDeleteVisit').onclick = () => {
+    const id = document.getElementById('fId').value;
+    if (!confirm('Удалить эту запись навсегда?')) return;
+    state.visits = state.visits.filter(v => v.id !== id);
+    save();
+    document.getElementById('bookingModal').classList.remove('open');
+    renderSchedule();
+  };
+
+  // --- УВЕДОМЛЕНИЯ ПАЦИЕНТУ И НА IPHONE ---
+  function cleanPhone(raw) {
+    let d = (raw || '').replace(/\D/g, '');
+    if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1);
+    else if (d.length === 10) d = '7' + d;
+    return d;
+  }
+
+  function sendMsg(v, channel, mode) {
+    if (!v) return;
+    const addr = state.cfg.address ? `\n📍 Адрес: ${state.cfg.address}` : '';
+    let text = '';
+    if (mode === 'remind') {
+      text = `Здравствуйте, ${v.name}! Напоминаю о вашей записи к врачу-остеопату: ${humanDate(v.date)} в ${v.time}.${addr}\nПожалуйста, подтвердите ваш визит.`;
+    } else if (mode === 'cancel') {
+      text = `Здравствуйте, ${v.name}. К сожалению, вынуждена отменить или перенести наш приём ${humanDate(v.date)} в ${v.time}. Напишите, пожалуйста, чтобы мы выбрали другое удобное окно.`;
+    } else if (mode === 'recs') {
+      const r = document.getElementById('fRecommendations').value.trim() || v.recs || 'Соблюдайте щадящий режим 2–3 дня и питьевой режим.';
+      text = `Здравствуйте, ${v.name}! Рекомендации после остеопатического приёма:\n\n${r}\n\nБудьте здоровы!`;
+    }
+    const ph = cleanPhone(v.phone);
+    const enc = encodeURIComponent(text);
+    if (channel === 'wa') window.open(`https://wa.me/${ph}?text=${enc}`, '_blank');
+    else if (channel === 'tg') window.open(`https://t.me/share/url?url=${encodeURIComponent(' ')}&text=${enc}`, '_blank');
+    else window.location.href = `sms:${ph ? '+'+ph : ''}?&body=${enc}`;
+  }
+
+  document.getElementById('btnWaRemind').onclick = () => sendMsg(currentModalVisit(), 'wa', 'remind');
+  document.getElementById('btnTgRemind').onclick = () => sendMsg(currentModalVisit(), 'tg', 'remind');
+  document.getElementById('btnSmsRemind').onclick = () => sendMsg(currentModalVisit(), 'sms', 'remind');
+  document.getElementById('btnSendRecs').onclick = () => sendMsg(currentModalVisit(), 'wa', 'recs');
+
+  function downloadIcsForVisit(v) {
+    if (!v) return;
+    const [y,m,d] = v.date.split('-').map(Number);
+    const [hh,mm] = v.time.split(':').map(Number);
+    const st = new Date(y, m-1, d, hh, mm);
+    const en = new Date(st.getTime() + (+v.duration || 60)*60000);
+    const f = dt => `${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+    const desc = [
+      v.phone ? `Тел: ${v.phone}` : '',
+      (v.zones && v.zones.length) ? `Зоны: ${v.zones.join(', ')}` : '',
+      v.anamnesis ? `Анамнез: ${v.anamnesis.replace(/\n/g,' ')}` : ''
+    ].filter(Boolean).join(' | ');
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//OsteoJournal//RU',
+      'BEGIN:VEVENT',
+      `UID:${v.id}@osteojournal`,
+      `DTSTAMP:${f(new Date())}`,
+      `DTSTART:${f(st)}`,
+      `DTEND:${f(en)}`,
+      `SUMMARY:Остеоприём: ${v.name}`,
+      `DESCRIPTION:${desc}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT120M',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Напоминание: приём через 2 часа',
+      'END:VALARM',
+      'BEGIN:VALARM',
+      'TRIGGER:-PT15M',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Приём через 15 минут',
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `priem-${v.date}-${v.time}.ics`;
+    a.click();
+  }
+
+  document.getElementById('btnAddIcs').onclick = () => downloadIcsForVisit(currentModalVisit());
+
+  // --- ВКЛАДКА БАЗЫ ПАЦИЕНТОВ ---
+  function renderPatients() {
+    const q = (document.getElementById('searchPatientInput').value || '').trim().toLowerCase();
+    const groups = new Map();
+    state.visits.forEach(v => {
+      const key = (v.name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(v);
+    });
+    document.getElementById('totalPatientsCount').textContent = groups.size;
+    const box = document.getElementById('patientsList');
+    box.innerHTML = '';
+
+    Array.from(groups.values()).forEach(arr => {
+      arr.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+      const latest = arr[0];
+      const hay = `${latest.name} ${latest.phone} ${latest.anamnesis} ${(latest.zones||[]).join(' ')}`.toLowerCase();
+      if (q && !hay.includes(q)) return;
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <div class="row-between">
+          <div>
+            <div style="font-weight:800;font-size:15px;">${esc(latest.name)}</div>
+            <div style="font-size:12px;color:var(--sub);">${esc(latest.phone || 'Без телефона')} ${latest.age ? '• '+esc(latest.age) : ''}</div>
+          </div>
+          <span class="badge">Визитов: ${arr.length}</span>
+        </div>
+        ${(latest.zones && latest.zones.length) ? `<div style="margin-top:4px;">\${latest.zones.map(z=>`<span class="tag-mini">${esc(z)}</span>`).join('')}</div>` : ''}
+        ${latest.anamnesis ? `<div class="anamnesis-preview"><b>Анамнез:</b> \${esc(latest.anamnesis)}</div>` : ''}
+        ${latest.progress ? `<div class="anamnesis-preview" style="background:#F0FDFA;color:#0F766E;"><b>Последний ход приёма (${latest.date}):</b>${esc(latest.progress)}</div>` : ''}
+      `;
+      card.onclick = () => {
+        state.date = latest.date;
+        openVisitModal(latest.time, latest);
+      };
+      box.appendChild(card);
+    });
+  }
+  document.getElementById('searchPatientInput').oninput = renderPatients;
+
+  // --- ВКЛАДКА НАСТРОЕК ШАГА И ГРАФИКА ---
+  let tmpStep = 60, tmpBreak = 0;
+
+  function renderSettings() {
+    const dc = curDayCfg();
+    tmpStep = +dc.step || 60;
+    tmpBreak = +dc.breakMin || 0;
+    document.getElementById('cfgStart').value = dc.start || '09:00';
+    document.getElementById('cfgEnd').value = dc.end || '18:00';
+    document.getElementById('cfgAddress').value = state.cfg.address || '';
+    document.getElementById('cfgAutoIcs').checked = !!state.cfg.autoIcs;
+    drawStepGrids();
+  }
+
+  function drawStepGrids() {
+    const sGrid = document.getElementById('stepSelectGrid');
+    sGrid.innerHTML = '';
+    [30,45,60,75,90].forEach(val => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn-soft ${tmpStep===val ? 'active' : ''}`;
+      b.style.background = tmpStep===val ? 'var(--teal)' : '#F1F5F9';
+      b.style.color = tmpStep===val ? '#fff' : 'var(--text)';
+      b.textContent = val + ' м';
+      b.onclick = () => { tmpStep = val; drawStepGrids(); };
+      sGrid.appendChild(b);
+    });
+
+    const bGrid = document.getElementById('breakSelectGrid');
+    bGrid.innerHTML = '';
+    [0,5,10,15,20].forEach(val => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-soft';
+      b.style.background = tmpBreak===val ? 'var(--teal)' : '#F1F5F9';
+      b.style.color = tmpBreak===val ? '#fff' : 'var(--text)';
+      b.textContent = val === 0 ? 'Без' : '+' + val + 'м';
+      b.onclick = () => { tmpBreak = val; drawStepGrids(); };
+      bGrid.appendChild(b);
+    });
+  }
+
+  document.getElementById('btnSaveSettings').onclick = () => {
+    const start = document.getElementById('cfgStart').value || '09:00';
+    const end = document.getElementById('cfgEnd').value || '18:00';
+    state.cfg.step = tmpStep;
+    state.cfg.breakMin = tmpBreak;
+    state.cfg.start = start;
+    state.cfg.end = end;
+    state.cfg.address = document.getElementById('cfgAddress').value.trim();
+    state.cfg.autoIcs = document.getElementById('cfgAutoIcs').checked;
+    state.dayCfg[state.date] = { step: tmpStep, breakMin: tmpBreak, start, end };
+    save();
+    switchMainTab('Schedule');
+  };
+
+  // Push-уведомления iOS PWA
+  document.getElementById('btnEnablePush').onclick = async () => {
+    if (!('Notification' in window)) {
+      alert('Чтобы включить прямые Push-уведомления на iPhone, сначала добавьте приложение на экран «Домой» через Safari (или используйте кнопку Календаря iPhone).');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      new Notification('ОстеоЖурнал', { body: 'Уведомления на iPhone успешно включены!' });
+    } else {
+      alert('Разрешите уведомления в настройках iPhone.');
+    }
+  };
+
+  // Экспорт и импорт базы
+  document.getElementById('btnExport').onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `osteo-backup-${state.date}.json`;
+    a.click();
+  };
+  document.getElementById('fileImport').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const p = JSON.parse(ev.target.result);
+        if (Array.isArray(p.visits)) {
+          state.cfg = p.cfg || state.cfg;
+          state.dayCfg = p.dayCfg || {};
+          state.visits = p.visits;
+          save();
+          renderSchedule();
+          alert('База пациентов успешно восстановлена!');
+        }
+      } catch(err){ alert('Ошибка чтения файла'); }
+    };
+    r.readAsText(f);
+  };
+
+  // --- ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК И ДАТ ---
+  function switchMainTab(name) {
+    ['Schedule','Patients','Settings'].forEach(t => {
+      document.getElementById('view' + t).classList.toggle('hidden', t !== name);
+    });
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === name);
+    });
+    if (name === 'Schedule') renderSchedule();
+    if (name === 'Patients') renderPatients();
+    if (name === 'Settings') renderSettings();
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.onclick = () => switchMainTab(b.dataset.tab);
+  });
+  document.getElementById('btnQuickStep').onclick = () => switchMainTab('Settings');
+  document.getElementById('btnCustomTime').onclick = () => openVisitModal('12:00', null);
+  document.getElementById('btnToday').onclick = () => { state.date = toISO(new Date()); renderSchedule(); };
+  document.getElementById('datePicker').onchange = e => { if (e.target.value) { state.date = e.target.value; renderSchedule(); } };
+
+  renderSchedule();
+})();
+</script>
+</body>
+</html>
